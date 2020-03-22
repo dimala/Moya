@@ -38,4 +38,8 @@ public enum Task {
 
     /// A file download task to a destination with extra parameters using the given encoding.
     case downloadParameters(parameters: [String: Any], encoding: ParameterEncoding, destination: DownloadDestination)
+
+    /// A file download task to a destination with resume data of canceled or failed request
+    case download(resumeData: Data, destination: DownloadDestination)
 }
+

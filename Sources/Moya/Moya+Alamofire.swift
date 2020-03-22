@@ -84,7 +84,7 @@ extension DataRequest: Requestable {
 extension DownloadRequest: Requestable {
     internal func response(callbackQueue: DispatchQueue?, completionHandler: @escaping RequestableCompletion) -> Self {
         return response(queue: callbackQueue) { handler  in
-            completionHandler(handler.response, handler.request, nil, handler.error)
+            completionHandler(handler.response, handler.request, handler.resumeData, handler.error)
         }
     }
 }

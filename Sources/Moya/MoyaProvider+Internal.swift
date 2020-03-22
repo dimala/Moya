@@ -102,6 +102,8 @@ public extension MoyaProvider {
                 return self.sendUploadMultipart(target, request: request, callbackQueue: callbackQueue, multipartBody: multipartBody, progress: progress, completion: completion)
             case .downloadDestination(let destination), .downloadParameters(_, _, let destination):
                 return self.sendDownloadRequest(target, request: request, callbackQueue: callbackQueue, destination: destination, progress: progress, completion: completion)
+            case let .download(resumeData, destination):
+                return self.sendDownloadRequest(target, resumeData: resumeData, request: request, callbackQueue: callbackQueue, destination: destination, completion: completion)
             }
         default:
             return self.stubRequest(target, request: request, callbackQueue: callbackQueue, completion: completion, endpoint: endpoint, stubBehavior: stubBehavior)
@@ -200,6 +202,24 @@ private extension MoyaProvider {
         return self.sendAlamofireRequest(alamoRequest, target: target, callbackQueue: callbackQueue, progress: progress, completion: completion)
     }
 
+    func sendDownloadRequest(_ target: Target, resumeData: Data, request: URLRequest, callbackQueue: DispatchQueue?, destination: @escaping DownloadDestination, progress: ProgressBlock? = nil, completion: @escaping Completion) -> CancellableToken {
+        let downloadRequest = manager.download(resumingWith: resumeData, to: destination)
+
+        if var currentRequest = downloadRequest.task?.currentRequest {
+            currentRequest.allHTTPHeaderFields = currentRequest
+                .allHTTPHeaderFields?
+                .merging(request.allHTTPHeaderFields ?? [:]) { $1 }
+
+            downloadRequest.task?.setValue(currentRequest, forKey: "currentRequest")
+        } else {
+            downloadRequest.task?.setValue(request, forKey: "currentRequest")
+        }
+
+        let validationCodes = target.validationType.statusCodes
+        let alamoRequest = validationCodes.isEmpty ? downloadRequest : downloadRequest.validate(statusCode: validationCodes)
+        return self.sendAlamofireRequest(alamoRequest, target: target, callbackQueue: callbackQueue, progress: progress, completion: completion)
+    }
+
     func sendRequest(_ target: Target, request: URLRequest, callbackQueue: DispatchQueue?, progress: Moya.ProgressBlock?, completion: @escaping Moya.Completion) -> CancellableToken {
         let initialRequest = manager.request(request as URLRequestConvertible)
         let validationCodes = target.validationType.statusCodes
@@ -268,6 +288,12 @@ private extension MoyaProvider {
 
         progressAlamoRequest.resume()
 
-        return CancellableToken(request: progressAlamoRequest)
+        if let downloadRequest = progressAlamoRequest as? DownloadRequest {
+            return CancellableToken {
+                downloadRequest.cancel(createResumeData: true)
+            }
+        } else {
+            return CancellableToken(request: progressAlamoRequest)
+        }
     }
 }
